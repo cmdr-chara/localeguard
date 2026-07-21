@@ -7,6 +7,8 @@ import {
   FileArrowUp,
   FileCode,
   Funnel,
+  Info,
+  List,
   LockKey,
   MagnifyingGlass,
   Play,
@@ -131,7 +133,9 @@ function App() {
   const [isLoading, setIsLoading] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
   const [dragTarget, setDragTarget] = useState<'source' | 'target' | null>(null)
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
   const loadingTimer = useRef<number | null>(null)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
   const pendingErrorFocus = useRef<'source' | 'target' | null>(null)
   const sourceErrorRef = useRef<HTMLParagraphElement>(null)
   const targetErrorRef = useRef<HTMLParagraphElement>(null)
@@ -151,6 +155,19 @@ function App() {
     errorElement?.focus()
     pendingErrorFocus.current = null
   }, [jsonErrors])
+
+  useEffect(() => {
+    if (!isMenuOpen) return
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setIsMenuOpen(false)
+      menuButtonRef.current?.focus()
+    }
+
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [isMenuOpen])
 
   const filteredFindings = useMemo(() => {
     if (!result) return []
@@ -295,14 +312,27 @@ function App() {
           </span>
           <span>LocaleGuard</span>
         </a>
-        <nav aria-label="Primary navigation">
-          <a href="#workbench">Compare</a>
-          <a href="#report">QA report</a>
-          <a href="#rules">Rules</a>
+        <nav id="primary-navigation" className={isMenuOpen ? 'open' : ''} aria-label="Primary navigation">
+          <a href="#workbench" onClick={() => setIsMenuOpen(false)}>Compare</a>
+          <a href="#report" onClick={() => setIsMenuOpen(false)}>QA report</a>
+          <a href="#rules" onClick={() => setIsMenuOpen(false)}>Rules</a>
         </nav>
-        <div className="local-proof">
-          <LockKey aria-hidden="true" weight="bold" />
-          <span>Runs locally</span>
+        <div className="header-actions">
+          <div className="local-proof">
+            <LockKey aria-hidden="true" weight="bold" />
+            <span className="local-proof-text">Runs locally</span>
+          </div>
+          <button
+            ref={menuButtonRef}
+            className="nav-toggle"
+            type="button"
+            aria-controls="primary-navigation"
+            aria-expanded={isMenuOpen}
+            aria-label={isMenuOpen ? 'Close navigation' : 'Open navigation'}
+            onClick={() => setIsMenuOpen((open) => !open)}
+          >
+            {isMenuOpen ? <X aria-hidden="true" weight="bold" /> : <List aria-hidden="true" weight="bold" />}
+          </button>
         </div>
       </header>
 
@@ -314,7 +344,7 @@ function App() {
               Input
             </div>
             <p className="eyebrow">Translation contract preflight</p>
-            <h1 id="hero-title">Ship the copy. Keep the contract.</h1>
+            <h1 id="hero-title"><span>Ship the copy.</span><span>Keep the contract.</span></h1>
             <p className="hero-subtitle">
               Catch broken JSON structure, placeholders, markup, and control codes before release.
             </p>
@@ -363,7 +393,11 @@ function App() {
                   {previewFindings.map((finding) => (
                     <li key={finding.id}>
                       <span className={`severity-icon ${finding.severity}`} aria-hidden="true">
-                        {finding.severity === 'critical' ? <X weight="bold" /> : <Warning weight="fill" />}
+                        {finding.severity === 'critical'
+                          ? <X weight="bold" />
+                          : finding.severity === 'warning'
+                            ? <Warning weight="fill" />
+                            : <Info weight="bold" />}
                       </span>
                       <span><strong>{finding.path}</strong><small>{finding.message}</small></span>
                       <em>{finding.severity}</em>
@@ -496,7 +530,7 @@ function App() {
                 <label className="search-box">
                   <span className="sr-only">Search findings</span>
                   <MagnifyingGlass aria-hidden="true" />
-                  <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search paths or messages" />
+                  <input type="search" autoComplete="off" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search paths or messages" />
                 </label>
               </div>
 
