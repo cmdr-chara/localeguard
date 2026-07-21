@@ -17,6 +17,7 @@ import {
 import {
   type ChangeEvent,
   type DragEvent,
+  type RefObject,
   useEffect,
   useMemo,
   useRef,
@@ -57,6 +58,10 @@ function scoreBand(score: number) {
   if (score >= 90) return { label: 'Ready', className: 'good' }
   if (score >= 70) return { label: 'Needs work', className: 'warning' }
   return { label: 'Release blocked', className: 'critical' }
+}
+
+function humanizeCategory(category: Finding['category']) {
+  return category.replaceAll('-', ' ').replaceAll('_', ' ')
 }
 
 function createMarkdownReport(
@@ -127,6 +132,9 @@ function App() {
   const [isDirty, setIsDirty] = useState(false)
   const [dragTarget, setDragTarget] = useState<'source' | 'target' | null>(null)
   const loadingTimer = useRef<number | null>(null)
+  const pendingErrorFocus = useRef<'source' | 'target' | null>(null)
+  const sourceErrorRef = useRef<HTMLParagraphElement>(null)
+  const targetErrorRef = useRef<HTMLParagraphElement>(null)
 
   useEffect(
     () => () => {
@@ -134,6 +142,15 @@ function App() {
     },
     [],
   )
+
+  useEffect(() => {
+    const kind = pendingErrorFocus.current
+    if (!kind || !jsonErrors[kind]) return
+
+    const errorElement = kind === 'source' ? sourceErrorRef.current : targetErrorRef.current
+    errorElement?.focus()
+    pendingErrorFocus.current = null
+  }, [jsonErrors])
 
   const filteredFindings = useMemo(() => {
     if (!result) return []
@@ -149,7 +166,24 @@ function App() {
     })
   }, [filter, result, search])
 
+  const invalidateResult = () => {
+    if (loadingTimer.current !== null) {
+      window.clearTimeout(loadingTimer.current)
+      loadingTimer.current = null
+    }
+    setResult(null)
+    setIsLoading(false)
+    setIsDirty(true)
+    setActiveFixture(null)
+    setFilter('all')
+    setSearch('')
+  }
+
   const runComparison = (nextSource = sourceText, nextTarget = targetText) => {
+    if (loadingTimer.current !== null) {
+      window.clearTimeout(loadingTimer.current)
+      loadingTimer.current = null
+    }
     const source = parseEditorJson(nextSource)
     const target = parseEditorJson(nextTarget)
     const nextErrors: JsonErrorState = {}
@@ -158,14 +192,16 @@ function App() {
     setJsonErrors(nextErrors)
 
     if (!source.ok || !target.ok) {
+      pendingErrorFocus.current = !source.ok ? 'source' : 'target'
       setResult(null)
       setIsLoading(false)
-      document.querySelector<HTMLElement>('[data-json-error="true"]')?.focus()
+      setIsDirty(true)
       return
     }
 
+    pendingErrorFocus.current = null
+    setResult(null)
     setIsLoading(true)
-    if (loadingTimer.current !== null) window.clearTimeout(loadingTimer.current)
     loadingTimer.current = window.setTimeout(() => {
       setResult(compareLocales(source.value, target.value))
       setIsLoading(false)
@@ -190,8 +226,7 @@ function App() {
   const onEditorChange = (kind: 'source' | 'target', value: string) => {
     if (kind === 'source') setSourceText(value)
     else setTargetText(value)
-    setActiveFixture(null)
-    setIsDirty(true)
+    invalidateResult()
     setJsonErrors((current) => ({ ...current, [kind]: undefined }))
   }
 
@@ -214,8 +249,8 @@ function App() {
       setTargetText(text)
       setTargetName(file.name)
     }
+    invalidateResult()
     setJsonErrors((current) => ({ ...current, [kind]: undefined }))
-    setIsDirty(true)
   }
 
   const onFileInput = (kind: 'source' | 'target', event: ChangeEvent<HTMLInputElement>) => {
@@ -230,7 +265,7 @@ function App() {
   }
 
   const downloadReport = () => {
-    if (!result) return
+    if (!result || isDirty || isLoading) return
     const report = createMarkdownReport(result, sourceName, targetName)
     const url = URL.createObjectURL(new Blob([report], { type: 'text/markdown;charset=utf-8' }))
     const anchor = document.createElement('a')
@@ -242,7 +277,9 @@ function App() {
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000)
   }
 
-  const band = scoreBand(result?.score ?? 0)
+  const band = result
+    ? scoreBand(result.score)
+    : { label: isDirty ? 'Changes not analyzed' : 'Awaiting analysis', className: 'pending' }
   const previewFindings = result?.findings.slice(0, 3) ?? []
 
   return (
@@ -336,7 +373,13 @@ function App() {
                 <a className="report-link" href="#report">View full QA report <ArrowRight aria-hidden="true" /></a>
               </>
             ) : (
-              <div className="preview-empty">Fix the JSON errors below to restore the preflight result.</div>
+              <div className="preview-empty">
+                {jsonErrors.source || jsonErrors.target
+                  ? 'Fix the JSON errors below, then run preflight.'
+                  : isDirty
+                    ? 'Changes not analyzed. Run preflight to refresh the result.'
+                    : 'Load two JSON documents and run preflight.'}
+              </div>
             )}
           </section>
         </section>
@@ -360,7 +403,7 @@ function App() {
                 aria-pressed={activeFixture === fixture.id}
                 title={fixture.description}
               >
-                {fixture.id === 'valid' ? <Check aria-hidden="true" weight="bold" /> : fixture.id === 'deltarune' ? <BracketsCurly aria-hidden="true" /> : <X aria-hidden="true" weight="bold" />}
+                {fixture.id === 'valid' ? <Check aria-hidden="true" weight="bold" /> : fixture.id === 'control-codes' ? <BracketsCurly aria-hidden="true" /> : <X aria-hidden="true" weight="bold" />}
                 <span>{fixture.shortLabel}<small>{fixture.label}</small></span>
               </button>
             ))}
@@ -373,6 +416,7 @@ function App() {
               fileName={sourceName}
               value={sourceText}
               error={jsonErrors.source}
+              errorRef={sourceErrorRef}
               isDragging={dragTarget === 'source'}
               onChange={(value) => onEditorChange('source', value)}
               onInput={(event) => onFileInput('source', event)}
@@ -392,6 +436,7 @@ function App() {
               fileName={targetName}
               value={targetText}
               error={jsonErrors.target}
+              errorRef={targetErrorRef}
               isDragging={dragTarget === 'target'}
               onChange={(value) => onEditorChange('target', value)}
               onInput={(event) => onFileInput('target', event)}
@@ -416,10 +461,10 @@ function App() {
               <div className="stage-label"><span>03</span>Release</div>
               <div>
                 <h2 id="report-title">QA report</h2>
-                <p>{result ? `${result.summary.critical} release-blocking issue${result.summary.critical === 1 ? '' : 's'} found.` : 'Run preflight to generate a report.'}</p>
+                <p>{result ? `${result.summary.critical} release-blocking issue${result.summary.critical === 1 ? '' : 's'} found.` : isDirty ? 'Changes not analyzed.' : 'Run preflight to generate a report.'}</p>
               </div>
             </div>
-            <button className="button button-secondary" type="button" onClick={downloadReport} disabled={!result}>
+            <button className="button button-secondary" type="button" onClick={downloadReport} disabled={!result || isDirty || isLoading}>
               <DownloadSimple aria-hidden="true" weight="bold" /> Export Markdown
             </button>
           </div>
@@ -476,7 +521,10 @@ function App() {
           ) : (
             <div className="empty-state report-empty">
               <FileCode aria-hidden="true" />
-              <div><h3>No report yet</h3><p>Provide two valid JSON documents and run preflight.</p></div>
+              <div>
+                <h3>{isDirty ? 'Changes not analyzed' : 'No report yet'}</h3>
+                <p>{jsonErrors.source || jsonErrors.target ? 'Fix the JSON errors, then run preflight.' : 'Run preflight to generate a fresh report.'}</p>
+              </div>
             </div>
           )}
         </section>
@@ -502,7 +550,7 @@ function App() {
       </footer>
 
       <div className="sr-only" aria-live="polite">
-        {isLoading ? 'Locale comparison in progress.' : result ? `Comparison complete. ${result.summary.total} findings.` : 'No comparison result.'}
+        {isLoading ? 'Locale comparison in progress.' : result ? `Comparison complete. ${result.summary.total} findings.` : isDirty ? 'Changes not analyzed.' : 'No comparison result.'}
       </div>
     </div>
   )
@@ -514,6 +562,7 @@ interface LocaleEditorProps {
   fileName: string
   value: string
   error?: string
+  errorRef: RefObject<HTMLParagraphElement | null>
   isDragging: boolean
   onChange: (value: string) => void
   onInput: (event: ChangeEvent<HTMLInputElement>) => void
@@ -528,6 +577,7 @@ function LocaleEditor({
   fileName,
   value,
   error,
+  errorRef,
   isDragging,
   onChange,
   onInput,
@@ -562,7 +612,7 @@ function LocaleEditor({
         aria-describedby={error ? `${editorId}-error` : undefined}
       />
       {isDragging && <div className="drop-overlay"><FileArrowUp aria-hidden="true" /><strong>Drop {kind} JSON here</strong></div>}
-      {error && <p className="json-error" id={`${editorId}-error`} role="alert" tabIndex={-1} data-json-error="true"><Warning aria-hidden="true" weight="fill" />{error}</p>}
+      {error && <p ref={errorRef} className="json-error" id={`${editorId}-error`} role="alert" tabIndex={-1}><Warning aria-hidden="true" weight="fill" />{error}</p>}
     </div>
   )
 }
@@ -577,7 +627,7 @@ function FindingRow({ finding }: { finding: Finding }) {
           </span>
           {finding.severity}
         </span>
-        <span className="finding-path"><strong>{finding.path}</strong><small>{finding.category.replaceAll('_', ' ')}</small></span>
+        <span className="finding-path"><strong>{finding.path}</strong><small>{humanizeCategory(finding.category)}</small></span>
         <span className="finding-message">{finding.message}</span>
         <ArrowDown className="finding-chevron" aria-hidden="true" />
       </summary>

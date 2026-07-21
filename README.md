@@ -52,14 +52,25 @@ LocaleGuard intentionally checks implementation contracts rather than judging tr
 | Area | Validation |
 | --- | --- |
 | JSON structure | Nested missing and extra keys, primitive types, `null`, arrays, and array lengths |
-| ICU | Placeholder names and formatter kinds, in source order |
-| Mustache | Double/triple-brace placeholders and section operators, in source order |
-| printf | Conversion specifications, including positional indexes; literal `%%` is ignored |
+| ICU | Placeholder names, formatter kinds, and multiplicity; named placeholders may reorder |
+| Mustache | Simple variables as an unordered multiset; section opening/closing structure in source order |
+| printf | Positional specifications may reorder only when every placeholder is explicitly indexed; non-positional specifications remain order-sensitive; literal `%%` is ignored |
 | HTML/XML | Opening, closing, and self-closing tag sequence |
 | Escapes | Literal escape sequences and C0 control characters, in source order |
 | GameMaker-style markers | Compact and bracket forms, separators, line markers, ordering, and repetition |
 
 Critical findings cover missing keys, type mismatches, and GameMaker-style marker changes. Warnings cover arrays and string-contract mismatches. Extra target keys are informational. The score starts at 100 and deducts 25 per critical finding, 10 per warning, and 2 per informational finding, floored at zero.
+
+## Industry context
+
+LocaleGuard focuses on contracts that established localization guidance treats as implementation-sensitive:
+
+- The [ICU MessageFormat guide](https://unicode-org.github.io/icu/userguide/format_parse/messages/) describes named arguments that translators may move to fit a language's grammar.
+- [Android localization guidance](https://developer.android.com/guide/topics/resources/localization) calls out placeholders and other code-like content that must remain unchanged in translated strings.
+- The [W3C internationalization overview](https://www.w3.org/International/questions/qa-i18n/) includes separating localizable elements from source code as part of internationalization design.
+- [Phrase QA documentation](https://support.phrase.com/hc/en-us/articles/5709703799324-Quality-Assurance-QA-TMS) includes tag, formatting, and line-break checks in translation quality assurance.
+
+These references frame the problem; LocaleGuard's supported rules and limits below remain the precise product contract.
 
 ## Architecture
 
@@ -92,11 +103,11 @@ This is a preflight checker, not a full localization management system or an ICU
 - Its GameMaker-style support targets the compact and bracket marker forms implemented in the engine; uncommon dialects may need an additional extractor and tests.
 - JSON files are limited to 5 MB in the UI. Very large catalogs and non-JSON formats are outside the current interface.
 
-## Read-only Deltarune localization case study
+## Real-world game localization case study
 
-The project was informed by a localization QA pattern familiar in GameMaker-based game modding: ordinary-looking text can carry control codes that change portraits, pacing, choices, or text behavior. A reviewer can translate every visible word correctly and still damage the file by removing, duplicating, or reordering one marker.
+The marker rules were validated privately against a real multi-chapter GameMaker localization corpus. Ordinary-looking text can carry control codes that change portraits, pacing, choices, or text behavior, so a translation can preserve every visible word while removing, duplicating, or reordering a critical marker.
 
-LocaleGuard models that risk with synthetic fixture strings only. No game files, dialogue, or copyrighted localization text are included, uploaded, or required. The case study shaped the marker extractor and the choice to preserve token order and multiplicity, rather than treating tokens as an unordered set.
+That reference corpus is not distributed. LocaleGuard demonstrates the behavior with synthetic fixture strings only; no game files, dialogue, assets, or copyrighted localization text are included, uploaded, or required. The case study shaped the marker extractor and its order-and-multiplicity rules.
 
 ## Building with Codex and GPT-5.6
 

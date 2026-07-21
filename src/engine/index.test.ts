@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   compareLocales,
-  extractDeltaruneMarkers,
   extractEscapeSequences,
+  extractGameMakerMarkers,
   extractIcuPlaceholders,
   extractMustachePlaceholders,
   extractPrintfPlaceholders,
@@ -100,6 +100,25 @@ describe('string contracts', () => {
     })
   })
 
+  it('allows ICU and simple Mustache variables to reorder while preserving multiplicity', () => {
+    const source = '{name} has {count, number}. {{first}} / {{second}} / {{first}}'
+    const reordered = '{count, number} avvisi per {name}. {{second}} / {{first}} / {{first}}'
+    const missingRepeat = '{count, number} avvisi per {name}. {{second}} / {{first}}'
+
+    expect(compareLocales({ message: source }, { message: reordered }).findings).toEqual([])
+    expect(categories({ message: source }, { message: missingRepeat })).toEqual(['mustache-placeholders'])
+    expect(categories({ message: '{name} {count} {name}' }, { message: '{count} {name}' })).toEqual([
+      'icu-placeholders',
+    ])
+  })
+
+  it('keeps Mustache section structure order-sensitive', () => {
+    const source = '{{#outer}}{{#inner}}{{name}}{{/inner}}{{/outer}}'
+    const target = '{{#inner}}{{#outer}}{{name}}{{/outer}}{{/inner}}'
+
+    expect(categories({ message: source }, { message: target })).toEqual(['mustache-placeholders'])
+  })
+
   it('checks Mustache operators, printf placeholders, and ignores literal percent escapes', () => {
     const source = '{{#items}}%1$04d %% {{/items}} %s'
     const target = '{{#entries}}%s %% {{/entries}} %1$04d'
@@ -111,6 +130,13 @@ describe('string contracts', () => {
       'mustache-placeholders',
       'printf-placeholders',
     ])
+  })
+
+  it('allows reordered printf placeholders only when every specifier is explicitly positional', () => {
+    expect(compareLocales({ message: '%1$s has %2$04d' }, { message: '%2$04d per %1$s' }).findings).toEqual([])
+    expect(categories({ message: '%s has %04d' }, { message: '%04d per %s' })).toEqual(['printf-placeholders'])
+    expect(categories({ message: '%1$s has %d' }, { message: '%d per %1$s' })).toEqual(['printf-placeholders'])
+    expect(categories({ message: '%1$s has %2$d' }, { message: '%1$s has %2$s' })).toEqual(['printf-placeholders'])
   })
 
   it('checks HTML/XML tags and escaped/control sequences in their original order', () => {
@@ -131,7 +157,7 @@ describe('string contracts', () => {
 &next`}\n${bracket}\n*lead`
     const result = compareLocales({ message: source }, { message: target })
 
-    expect(extractDeltaruneMarkers(source)).toEqual([
+    expect(extractGameMakerMarkers(source)).toEqual([
       String.raw`\E3`,
       String.raw`\EA`,
       String.raw`\cY`,
@@ -152,10 +178,10 @@ describe('string contracts', () => {
       '^[choice]',
       '*',
     ])
-    expect(markerSignature(extractDeltaruneMarkers(source))).toContain(`${String.raw`\E3`} → ${String.raw`\EA`}`)
+    expect(markerSignature(extractGameMakerMarkers(source))).toContain(`${String.raw`\E3`} → ${String.raw`\EA`}`)
     expect(result.findings).toHaveLength(1)
     expect(result.findings[0]).toMatchObject({
-      category: 'deltarune-markers',
+      category: 'game-control-markers',
       severity: 'critical',
       path: '$.message',
     })
@@ -165,10 +191,38 @@ describe('string contracts', () => {
     const source = '* root text&* next&  * spaced&&* again\n  * newline'
     const target = '* tradotto text&* next&  * spaced&* again\n  * newline'
 
-    expect(extractDeltaruneMarkers(source)).toEqual(['*', '&', '*', '&', '*', '&', '&', '*', '*'])
+    expect(extractGameMakerMarkers(source)).toEqual(['*', '&', '*', '&', '*', '&', '&', '*', '*'])
     expect(compareLocales({ message: source }, { message: target }).findings).toMatchObject([
-      { category: 'deltarune-markers', severity: 'critical', path: '$.message' },
+      { category: 'game-control-markers', severity: 'critical', path: '$.message' },
     ])
+  })
+
+  it('assigns GameMaker marker escapes to one category without duplicate score penalties', () => {
+    const source = String.raw`\f0Font \v[3]Value \nNext`
+    const target = String.raw`\f1Font \v[4]Value \nNext`
+    const result = compareLocales({ message: source }, { message: target })
+
+    expect(extractEscapeSequences(source)).toEqual([String.raw`\n`])
+    expect(result.findings).toMatchObject([
+      { category: 'game-control-markers', severity: 'critical', path: '$.message' },
+    ])
+    expect(result.summary).toEqual({ total: 1, critical: 1, warning: 0, info: 0 })
+    expect(result.score).toBe(75)
+  })
+
+  it('still recognizes ordinary escapes and genuine control characters', () => {
+    const literalEscapes = String.raw`\n\t\\\u00A0\f\v`
+    const actualControls = `a${String.fromCharCode(12)}b${String.fromCharCode(11)}c`
+
+    expect(extractEscapeSequences(literalEscapes)).toEqual([
+      String.raw`\n`,
+      String.raw`\t`,
+      String.raw`\\`,
+      String.raw`\u00A0`,
+      String.raw`\f`,
+      String.raw`\v`,
+    ])
+    expect(extractEscapeSequences(actualControls)).toEqual(['U+000C', 'U+000B'])
   })
 })
 

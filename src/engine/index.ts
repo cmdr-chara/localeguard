@@ -19,7 +19,7 @@ export type Category =
   | 'printf-placeholders'
   | 'html-tags'
   | 'escape-sequences'
-  | 'deltarune-markers'
+  | 'game-control-markers'
 
 export interface Finding {
   readonly id: string
@@ -59,12 +59,19 @@ export type ParseLocaleJsonResult =
 
 type JsonKind = 'object' | 'array' | 'string' | 'number' | 'boolean' | 'null'
 type TokenExtractor = (value: string) => readonly string[]
+type TokenComparator = (left: readonly string[], right: readonly string[]) => boolean
+
+interface PositionedToken {
+  readonly index: number
+  readonly token: string
+}
 
 interface StringContract {
   readonly category: Exclude<Category, 'missing-key' | 'extra-key' | 'type-mismatch' | 'array-length'>
   readonly severity: Severity
   readonly label: string
   readonly extract: TokenExtractor
+  readonly compare?: TokenComparator
   readonly remediation: string
 }
 
@@ -74,13 +81,15 @@ const stringContracts: readonly StringContract[] = [
     severity: 'warning',
     label: 'ICU placeholder',
     extract: extractIcuPlaceholders,
-    remediation: 'Keep ICU placeholder names and formatter kinds in the same order.',
+    compare: sameTokenMultiset,
+    remediation: 'Keep every ICU placeholder name, formatter kind, and occurrence intact.',
   },
   {
     category: 'mustache-placeholders',
     severity: 'warning',
     label: 'Mustache placeholder',
     extract: extractMustachePlaceholders,
+    compare: sameMustacheContract,
     remediation: 'Keep Mustache placeholders and section operators intact.',
   },
   {
@@ -88,6 +97,7 @@ const stringContracts: readonly StringContract[] = [
     severity: 'warning',
     label: 'printf placeholder',
     extract: extractPrintfPlaceholders,
+    compare: samePrintfContract,
     remediation: 'Keep printf specifiers, including positional indexes, intact.',
   },
   {
@@ -105,10 +115,10 @@ const stringContracts: readonly StringContract[] = [
     remediation: 'Keep escaped and control sequences intact.',
   },
   {
-    category: 'deltarune-markers',
+    category: 'game-control-markers',
     severity: 'critical',
-    label: 'Deltarune/GameMaker marker',
-    extract: extractDeltaruneMarkers,
+    label: 'GameMaker control marker',
+    extract: extractGameMakerMarkers,
     remediation: 'Preserve control markers exactly, including their order and repetition.',
   },
 ]
@@ -220,11 +230,17 @@ export function extractHtmlTags(value: string): readonly string[] {
 
 /** Extracts literal escaped sequences and actual C0 control characters. */
 export function extractEscapeSequences(value: string): readonly string[] {
-  const positioned: Array<{ readonly index: number; readonly token: string }> = []
+  const positioned: PositionedToken[] = []
   const escapedMatcher = /\\(?:[\\"'nrtbfv0]|x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4})/g
+  const markerRanges = extractPositionedGameMakerMarkers(value)
+    .filter(({ token }) => token.startsWith('\\'))
+    .map(({ index, token }) => ({ start: index, end: index + token.length }))
 
   for (const match of value.matchAll(escapedMatcher)) {
-    if (match.index !== undefined) {
+    const overlapsMarker =
+      match.index !== undefined &&
+      markerRanges.some(({ start, end }) => match.index! >= start && match.index! < end)
+    if (match.index !== undefined && !overlapsMarker) {
       positioned.push({ index: match.index, token: match[0] })
     }
   }
@@ -242,8 +258,12 @@ export function extractEscapeSequences(value: string): readonly string[] {
 }
 
 /** Extracts compact and bracket GameMaker markers, preserving exact source order and repetition. */
-export function extractDeltaruneMarkers(value: string): readonly string[] {
-  const positioned: Array<{ readonly index: number; readonly token: string }> = []
+export function extractGameMakerMarkers(value: string): readonly string[] {
+  return extractPositionedGameMakerMarkers(value).map(({ token }) => token)
+}
+
+function extractPositionedGameMakerMarkers(value: string): readonly PositionedToken[] {
+  const positioned: PositionedToken[] = []
   const controlMatcher = /\\(?:E(?:\[[^\]\r\n]+\]|[A-Za-z0-9])|c(?:\[[^\]\r\n]+\]|[A-Za-z0-9])|f(?:\[[^\]\r\n]+\]|[A-Za-z0-9])|s(?:\[[^\]\r\n]+\]|[A-Za-z0-9])|w\[[^\]\r\n]+\]|v\[[^\]\r\n]+\])|\^(?:\[[^\]\r\n]+\]|[1-9])|\/%/g
   const lineStartStarMatcher = /(?:^|[\n&])\s*(\*)/gm
 
@@ -271,7 +291,6 @@ export function extractDeltaruneMarkers(value: string): readonly string[] {
 
   return positioned
     .sort((left, right) => left.index - right.index || compareText(left.token, right.token))
-    .map(({ token }) => token)
 }
 
 /** Renders a stable, human-readable signature that retains token order and multiplicity. */
@@ -381,7 +400,8 @@ function compareStringContracts(source: string, target: string, path: string, fi
   for (const contract of stringContracts) {
     const expectedTokens = contract.extract(source)
     const actualTokens = contract.extract(target)
-    if (!sameTokens(expectedTokens, actualTokens)) {
+    const matches = contract.compare ?? sameTokens
+    if (!matches(expectedTokens, actualTokens)) {
       addFinding(findings, {
         category: contract.category,
         severity: contract.severity,
@@ -437,6 +457,43 @@ function propertyPath(parent: string, key: string): string {
 
 function sameTokens(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((token, index) => token === right[index])
+}
+
+function sameTokenMultiset(left: readonly string[], right: readonly string[]): boolean {
+  return sameTokens([...left].sort(compareText), [...right].sort(compareText))
+}
+
+function sameMustacheContract(left: readonly string[], right: readonly string[]): boolean {
+  const partition = (tokens: readonly string[]) => {
+    const variables: string[] = []
+    const structure: string[] = []
+
+    for (const token of tokens) {
+      const content = token.slice(2, -2).trimStart()
+      if (/^[#/^!>&]/.test(content)) structure.push(token)
+      else variables.push(token)
+    }
+
+    return { variables, structure }
+  }
+
+  const leftParts = partition(left)
+  const rightParts = partition(right)
+  return (
+    sameTokenMultiset(leftParts.variables, rightParts.variables) &&
+    sameTokens(leftParts.structure, rightParts.structure)
+  )
+}
+
+function samePrintfContract(left: readonly string[], right: readonly string[]): boolean {
+  const isExplicitlyPositional = (token: string) => /^%\d+\$/.test(token)
+  const allExplicitlyPositional =
+    left.length > 0 &&
+    right.length > 0 &&
+    left.every(isExplicitlyPositional) &&
+    right.every(isExplicitlyPositional)
+
+  return allExplicitlyPositional ? sameTokenMultiset(left, right) : sameTokens(left, right)
 }
 
 function compareText(left: string, right: string): number {

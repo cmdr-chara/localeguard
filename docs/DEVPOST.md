@@ -18,7 +18,7 @@ Localization work is full of text that is not really just text. Variables, forma
 
 ### What it does
 
-LocaleGuard validates nested JSON keys, value types, `null`, array length, ICU placeholder names and formatter kinds, Mustache tokens, printf specifiers, HTML/XML tag sequence, escaped and control sequences, and compact or bracket GameMaker-style markers. It keeps token order and repetition intact during comparison, which matters for control strings.
+LocaleGuard validates nested JSON keys, value types, `null`, array length, ICU placeholder names and formatter kinds, Mustache tokens, printf specifiers, HTML/XML tag sequence, escaped and control sequences, and compact or bracket GameMaker-style markers. Named ICU and simple Mustache variables may move with the translation; structural section operators, non-positional printf, tags, escapes, and game markers retain their required order.
 
 Three synthetic in-app fixtures make the behavior inspectable without importing data: a broken generic translation, a valid translation, and a GameMaker-style marker regression. The game-oriented fixture contains no dialogue or source material from any game.
 
@@ -30,7 +30,7 @@ Codex and GPT-5.6 accelerated implementation by helping decompose the engine, dr
 
 ### Challenges
 
-The tricky part was avoiding a simplistic token set comparison. Tokens can be repeated, order can matter, and brace-based syntaxes can overlap. The engine therefore preserves source order and multiplicity, separates extractor responsibilities, and ignores literal `%%` when parsing printf. The UI challenge was making a technical report readable enough to serve translators and release reviewers, not only engineers.
+The tricky part was avoiding both a simplistic token set comparison and a blanket order rule. Tokens can repeat, some named variables may move, structural operators cannot, and brace-based syntaxes can overlap. The engine applies syntax-specific comparison rules, separates extractor ownership, and ignores literal `%%` when parsing printf. The UI challenge was making a technical report readable enough to serve translators and release reviewers, not only engineers.
 
 ### Accomplishments
 

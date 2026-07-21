@@ -1,5 +1,5 @@
 export interface LocaleFixture {
-  id: 'broken' | 'valid' | 'deltarune'
+  id: 'broken' | 'valid' | 'control-codes'
   label: string
   shortLabel: string
   description: string
@@ -18,6 +18,7 @@ const genericSource = {
   },
   welcome: {
     title: 'Welcome back, {name}',
+    summary: '{name} has {count, number} alerts',
     subtitle: 'You have %d unread messages',
     badge: '{{tier}} member',
   },
@@ -41,6 +42,7 @@ const genericBrokenTarget = {
   },
   welcome: {
     title: 'Bentornato, {nome}',
+    summary: '{nome} ha {count, number} avvisi',
     subtitle: 'Hai %s messaggi non letti',
     badge: 'Membro {{livello}}',
   },
@@ -61,6 +63,7 @@ const genericValidTarget = {
   },
   welcome: {
     title: 'Bentornato, {name}',
+    summary: '{count, number} avvisi per {name}',
     subtitle: 'Hai %d messaggi non letti',
     badge: 'Membro {{tier}}',
   },
@@ -77,7 +80,7 @@ const genericValidTarget = {
   ],
 }
 
-const syntheticDeltaruneSource = {
+const syntheticControlCodeSource = {
   face: '\\E3* System check^1&* Continue?/%',
   palette: '\\cYALERT\\c0',
   font: '\\f0Default',
@@ -88,7 +91,7 @@ const syntheticDeltaruneSource = {
   },
 }
 
-const syntheticDeltaruneBrokenTarget = {
+const syntheticControlCodeBrokenTarget = {
   face: '\\E4 System check^2& Continue?',
   palette: '\\cRALERT\\c0',
   font: '\\f1Default',
@@ -121,14 +124,14 @@ export const fixtures: LocaleFixture[] = [
     targetText: format(genericValidTarget),
   },
   {
-    id: 'deltarune',
-    label: 'Synthetic Deltarune-style regression',
+    id: 'control-codes',
+    label: 'Synthetic RPG control-code regression',
     shortLabel: 'Control-code demo',
     description: 'Original synthetic strings exercise compact and bracketed GameMaker-style control markers.',
     sourceName: 'synthetic-source.json',
     targetName: 'synthetic-broken.json',
-    sourceText: format(syntheticDeltaruneSource),
-    targetText: format(syntheticDeltaruneBrokenTarget),
+    sourceText: format(syntheticControlCodeSource),
+    targetText: format(syntheticControlCodeBrokenTarget),
   },
 ]
 

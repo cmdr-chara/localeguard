@@ -15,11 +15,11 @@ Use this as the final gate. Checked items are present in the local project; unch
 
 - [x] Run `npm run typecheck` in the final working tree.
 - [x] Run `npm run lint` in the final working tree.
-- [x] Run `npm test` in the final working tree: 11 tests passed.
+- [x] Run `npm test` in the final working tree: 16 tests passed.
 - [x] Run `npm run build` in the final working tree.
 - [x] Perform a final browser smoke test: broken fixture, valid fixture, control-code fixture, invalid JSON, filters, search, and the Markdown export action.
 
-The in-app browser completed the export click without a console error, but its automation layer did not expose the Blob download event. Confirm the downloaded `.md` file once in the normal recording browser before submission.
+Markdown export was verified in a normal browser: the report downloaded successfully and the export produced no console errors.
 
 ## Submission assets and links
 
