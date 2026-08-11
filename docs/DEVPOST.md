@@ -49,7 +49,7 @@ Potential next steps are richer ICU parsing, attribute-level markup validation, 
 
 ## Submission fields
 
-- Repository URL: **[PENDING: repository has not been hosted]**
-- Live demo URL: **[PENDING: deployment has not been created]**
+- Repository URL: **https://github.com/cmdr-chara/localeguard**
+- Live demo URL: **https://cmdr-chara.github.io/localeguard/**
 - Demo video URL: **[PENDING: record and upload the demo]**
 - Screenshot: `docs/localeguard-preview.png` **[READY: captured from the final local UI]**

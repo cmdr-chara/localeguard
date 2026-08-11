@@ -25,9 +25,9 @@ Markdown export was verified in a normal browser: the report downloaded successf
 
 - [x] Capture `docs/localeguard-preview.png` from the finished UI.
 - [ ] Record and upload the under-three-minute demo video.
-- [ ] Host the repository and add its URL to `docs/DEVPOST.md`.
-- [ ] Deploy the app and add the live URL to `README.md` and `docs/DEVPOST.md`.
-- [ ] Confirm the deployed app still runs entirely in the browser and does not send locale contents over the network.
+- [x] Host the repository and add its URL to `docs/DEVPOST.md`.
+- [x] Deploy the app and add the live URL to `README.md` and `docs/DEVPOST.md`.
+- [x] Confirm the deployed app still runs entirely in the browser and does not send locale contents over the network.
 
 ## Before submitting
 

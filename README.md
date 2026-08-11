@@ -2,6 +2,12 @@
 
 **LocaleGuard is a local-first preflight tool for JSON translations.** Load a source locale and a target locale, then catch broken structure, placeholders, markup, escapes, and GameMaker-style control markers before a release reaches players.
 
+**[Try LocaleGuard in your browser](https://cmdr-chara.github.io/localeguard/)** · No account, upload, or API key required
+
+[![Live demo](https://img.shields.io/badge/live_demo-open-c8f51b?style=flat-square&labelColor=0b0d0c)](https://cmdr-chara.github.io/localeguard/)
+[![Deploy to GitHub Pages](https://github.com/cmdr-chara/localeguard/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/cmdr-chara/localeguard/actions/workflows/deploy-pages.yml)
+[![MIT License](https://img.shields.io/badge/license-MIT-6f7b73?style=flat-square&labelColor=0b0d0c)](LICENSE)
+
 ## Judge quickstart
 
 ```bash
@@ -121,7 +127,7 @@ The important human decisions were product decisions: keep files in the browser,
 - Devpost copy: [`docs/DEVPOST.md`](docs/DEVPOST.md)
 - Recorded-demo plan: [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md)
 - Submission readiness: [`docs/SUBMISSION_CHECKLIST.md`](docs/SUBMISSION_CHECKLIST.md)
-- Live URL: **[PENDING: deploy URL has not been created]**
+- Live URL: **https://cmdr-chara.github.io/localeguard/**
 
 ## Development commands
 
