@@ -39,7 +39,7 @@ const MAX_FILE_BYTES = 5 * 1024 * 1024
 
 function parseEditorJson(text: string): { ok: true; value: JSONValue } | { ok: false; error: string } {
   if (!text.trim()) {
-    return { ok: false, error: 'Add a JSON document before running preflight.' }
+    return { ok: false, error: 'Paste or choose a JSON file first.' }
   }
 
   try {
@@ -57,9 +57,21 @@ function formatValue(value: unknown) {
 }
 
 function scoreBand(score: number) {
-  if (score >= 90) return { label: 'Ready', className: 'good' }
-  if (score >= 70) return { label: 'Needs work', className: 'warning' }
-  return { label: 'Release blocked', className: 'critical' }
+  if (score >= 90) return { label: 'Low risk', className: 'good' }
+  if (score >= 70) return { label: 'Review needed', className: 'warning' }
+  return { label: 'Critical issues', className: 'critical' }
+}
+
+function severityLabel(severity: SeverityFilter) {
+  if (severity === 'all') return 'All'
+  if (severity === 'critical') return 'Critical'
+  if (severity === 'warning') return 'Warnings'
+  return 'Info'
+}
+
+function criticalIssueSummary(count: number) {
+  if (count === 0) return 'No critical issues.'
+  return `${count} critical issue${count === 1 ? '' : 's'}.`
 }
 
 function humanizeCategory(category: Finding['category']) {
@@ -79,7 +91,7 @@ function createMarkdownReport(
             `| ${finding.severity} | ${finding.category} | \`${finding.path}\` | ${finding.message.replaceAll('|', '\\|')} |`,
         )
         .join('\n')
-    : '| info | none | `$` | No contract regressions detected. |'
+    : '| info | none | `$` | No issues found. |'
 
   const details = result.findings
     .map(
@@ -89,11 +101,11 @@ function createMarkdownReport(
 - Category: ${finding.category}
 - Expected: \`${formatValue(finding.expected).replaceAll('`', '\\`')}\`
 - Actual: \`${formatValue(finding.actual).replaceAll('`', '\\`')}\`
-${finding.remediation ? `- Remediation: ${finding.remediation}` : ''}`,
+${finding.remediation ? `- Fix: ${finding.remediation}` : ''}`,
     )
     .join('\n\n')
 
-  return `# LocaleGuard preflight report
+  return `# LocaleGuard report
 
 - Source: ${sourceName}
 - Target: ${targetName}
@@ -101,17 +113,17 @@ ${finding.remediation ? `- Remediation: ${finding.remediation}` : ''}`,
 - Score: ${result.score}/100
 - Critical: ${result.summary.critical}
 - Warnings: ${result.summary.warning}
-- Informational: ${result.summary.info}
+- Info: ${result.summary.info}
 
-## Findings
+## Issues
 
-| Severity | Category | JSON path | Explanation |
+| Severity | Category | JSON path | Message |
 | --- | --- | --- | --- |
 ${rows}
 
 ${details}
 
-Generated locally by LocaleGuard. File contents never left the browser.
+Created by LocaleGuard. Both files were checked in the browser.
 `
 }
 
@@ -254,7 +266,7 @@ function App() {
       return
     }
     if (file.size > MAX_FILE_BYTES) {
-      setJsonErrors((current) => ({ ...current, [kind]: 'File is larger than the 5 MB browser safety limit.' }))
+      setJsonErrors((current) => ({ ...current, [kind]: 'Choose a JSON file smaller than 5 MB.' }))
       return
     }
 
@@ -287,7 +299,7 @@ function App() {
     const url = URL.createObjectURL(new Blob([report], { type: 'text/markdown;charset=utf-8' }))
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = 'localeguard-preflight.md'
+    anchor.download = 'localeguard-report.md'
     document.body.append(anchor)
     anchor.click()
     anchor.remove()
@@ -296,14 +308,12 @@ function App() {
 
   const band = result
     ? scoreBand(result.score)
-    : { label: isDirty ? 'Changes not analyzed' : 'Awaiting analysis', className: 'pending' }
+    : { label: isDirty ? 'Files changed' : 'Not checked', className: 'pending' }
   const previewFindings = result?.findings.slice(0, 3) ?? []
 
   return (
     <div className="app-shell">
-      <a className="skip-link" href="#workbench">
-        Skip to comparison workbench
-      </a>
+      <a className="skip-link" href="#workbench">Skip to file comparison</a>
 
       <header className="site-header">
         <a className="brand" href="#top" aria-label="LocaleGuard home">
@@ -314,13 +324,13 @@ function App() {
         </a>
         <nav id="primary-navigation" className={isMenuOpen ? 'open' : ''} aria-label="Primary navigation">
           <a href="#workbench" onClick={() => setIsMenuOpen(false)}>Compare</a>
-          <a href="#report" onClick={() => setIsMenuOpen(false)}>QA report</a>
-          <a href="#rules" onClick={() => setIsMenuOpen(false)}>Rules</a>
+          <a href="#report" onClick={() => setIsMenuOpen(false)}>Results</a>
+          <a href="#rules" onClick={() => setIsMenuOpen(false)}>Checks</a>
         </nav>
         <div className="header-actions">
           <div className="local-proof">
             <LockKey aria-hidden="true" weight="bold" />
-            <span className="local-proof-text">Runs locally</span>
+            <span className="local-proof-text">Files stay private</span>
           </div>
           <button
             ref={menuButtonRef}
@@ -339,33 +349,29 @@ function App() {
       <main id="top">
         <section className="hero" aria-labelledby="hero-title">
           <div className="hero-copy">
-            <div className="stage-label">
-              <span>01</span>
-              Input
-            </div>
-            <p className="eyebrow">Translation contract preflight</p>
-            <h1 id="hero-title"><span>Ship the copy.</span><span>Keep the contract.</span></h1>
+            <div className="stage-label">JSON localization</div>
+            <h1 id="hero-title"><span>Find localization errors</span><span>before release.</span></h1>
             <p className="hero-subtitle">
-              Catch broken JSON structure, placeholders, markup, and control codes before release.
+              Compare two JSON files and find missing keys, changed placeholders, broken markup, and control codes.
             </p>
             <div className="hero-actions">
               <a className="button button-primary" href="#workbench">
-                Compare files <ArrowDown aria-hidden="true" weight="bold" />
+                Compare JSON files <ArrowDown aria-hidden="true" weight="bold" />
               </a>
               <button className="button button-secondary" type="button" onClick={() => loadFixture(defaultFixture)}>
-                <Play aria-hidden="true" weight="fill" /> Run broken demo
+                <Play aria-hidden="true" weight="fill" /> Load example
               </button>
             </div>
             <p className="privacy-line">
-              <ShieldCheck aria-hidden="true" weight="bold" /> Files stay in this browser. No uploads. No telemetry.
+              <ShieldCheck aria-hidden="true" weight="bold" /> Your files never leave this browser.
             </p>
           </div>
 
           <section className="preflight-preview" aria-labelledby="preview-title">
             <div className="panel-heading">
               <div>
-                <p>Live result</p>
-                <h2 id="preview-title">Preflight snapshot</h2>
+                <p>Current result</p>
+                <h2 id="preview-title">Overview</h2>
               </div>
               <span className={`status-label ${band.className}`}>{band.label}</span>
             </div>
@@ -374,14 +380,14 @@ function App() {
                 <span />
                 <span />
                 <span />
-                Checking contracts locally
+                Checking files
               </div>
             ) : result ? (
               <>
                 <div className="score-row">
                   <div className={`score ${band.className}`}>
                     <strong>{result.score}</strong>
-                    <span>quality score<br />out of 100</span>
+                    <span>score<br />out of 100</span>
                   </div>
                   <dl className="preview-totals">
                     <div><dt>Critical</dt><dd>{result.summary.critical}</dd></div>
@@ -400,19 +406,19 @@ function App() {
                             : <Info weight="bold" />}
                       </span>
                       <span><strong>{finding.path}</strong><small>{finding.message}</small></span>
-                      <em>{finding.severity}</em>
+                      <em>{severityLabel(finding.severity)}</em>
                     </li>
                   ))}
                 </ol>
-                <a className="report-link" href="#report">View full QA report <ArrowRight aria-hidden="true" /></a>
+                <a className="report-link" href="#report">See all results <ArrowRight aria-hidden="true" /></a>
               </>
             ) : (
               <div className="preview-empty">
                 {jsonErrors.source || jsonErrors.target
-                  ? 'Fix the JSON errors below, then run preflight.'
+                  ? 'Fix the JSON errors below, then check the files again.'
                   : isDirty
-                    ? 'Changes not analyzed. Run preflight to refresh the result.'
-                    : 'Load two JSON documents and run preflight.'}
+                    ? 'The files changed. Check them again to update this result.'
+                    : 'Choose a source file and a translated file to begin.'}
               </div>
             )}
           </section>
@@ -420,10 +426,10 @@ function App() {
 
         <section className="workbench" id="workbench" aria-labelledby="workbench-title">
           <div className="section-heading">
-            <div className="stage-label"><span>02</span>Compare</div>
+            <div className="stage-label">Compare</div>
             <div>
-              <h2 id="workbench-title">Inspect the contract, not just the copy.</h2>
-              <p>Load two JSON locales, edit them in place, then run the same deterministic engine used by the report.</p>
+              <h2 id="workbench-title">Compare locale files</h2>
+              <p>Choose the source and translated JSON files. You can edit either one before checking them.</p>
             </div>
           </div>
 
@@ -459,7 +465,7 @@ function App() {
               onDrop={(event) => onDrop('source', event)}
             />
             <div className="contract-bridge" aria-hidden="true">
-              <span>contract</span>
+              <span>compare</span>
               <i />
               <i />
               <i />
@@ -481,10 +487,10 @@ function App() {
           </div>
 
           <div className="analyze-bar">
-            <p><LockKey aria-hidden="true" /> Parsed in memory. Nothing leaves this tab.</p>
+            <p><LockKey aria-hidden="true" /> Files are read in this tab only.</p>
             <button className="button button-primary analyze-button" type="button" onClick={() => runComparison()} disabled={isLoading}>
               <Funnel aria-hidden="true" weight="bold" />
-              {isLoading ? 'Running preflight' : isDirty ? 'Analyze changes' : 'Analyze translation'}
+              {isLoading ? 'Checking files' : isDirty ? 'Check changes' : 'Check files'}
             </button>
           </div>
         </section>
@@ -492,10 +498,10 @@ function App() {
         <section className="report" id="report" aria-labelledby="report-title">
           <div className="report-topline">
             <div className="section-heading compact">
-              <div className="stage-label"><span>03</span>Release</div>
+              <div className="stage-label">Results</div>
               <div>
-                <h2 id="report-title">QA report</h2>
-                <p>{result ? `${result.summary.critical} release-blocking issue${result.summary.critical === 1 ? '' : 's'} found.` : isDirty ? 'Changes not analyzed.' : 'Run preflight to generate a report.'}</p>
+                <h2 id="report-title">Results</h2>
+                <p>{result ? criticalIssueSummary(result.summary.critical) : isDirty ? 'The files have changed.' : 'Check both files to see the results.'}</p>
               </div>
             </div>
             <button className="button button-secondary" type="button" onClick={downloadReport} disabled={!result || isDirty || isLoading}>
@@ -509,8 +515,8 @@ function App() {
                 <div className={`metric score-metric ${band.className}`}><span>Score</span><strong>{result.score}<small>/100</small></strong></div>
                 <div className="metric"><span>Critical</span><strong>{result.summary.critical}</strong></div>
                 <div className="metric"><span>Warnings</span><strong>{result.summary.warning}</strong></div>
-                <div className="metric"><span>Informational</span><strong>{result.summary.info}</strong></div>
-                <div className="metric"><span>Total findings</span><strong>{result.summary.total}</strong></div>
+                <div className="metric"><span>Info</span><strong>{result.summary.info}</strong></div>
+                <div className="metric"><span>Total issues</span><strong>{result.summary.total}</strong></div>
               </div>
 
               <div className="report-controls">
@@ -523,29 +529,29 @@ function App() {
                       onClick={() => setFilter(severity)}
                       aria-pressed={filter === severity}
                     >
-                      {severity} <span>{severity === 'all' ? result.summary.total : result.summary[severity]}</span>
+                      {severityLabel(severity)} <span>{severity === 'all' ? result.summary.total : result.summary[severity]}</span>
                     </button>
                   ))}
                 </div>
                 <label className="search-box">
-                  <span className="sr-only">Search findings</span>
+                  <span className="sr-only">Search issues</span>
                   <MagnifyingGlass aria-hidden="true" />
-                  <input type="search" autoComplete="off" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search paths or messages" />
+                  <input type="search" autoComplete="off" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search paths and messages" />
                 </label>
               </div>
 
               {result.findings.length === 0 ? (
                 <div className="success-state" role="status">
                   <Check aria-hidden="true" weight="bold" />
-                  <div><h3>Preflight passed</h3><p>No structural or marker regressions were detected.</p></div>
+                  <div><h3>No issues found</h3><p>Keys, value types, placeholders, markup, and control codes match the source file.</p></div>
                 </div>
               ) : filteredFindings.length === 0 ? (
                 <div className="empty-state" role="status">
                   <MagnifyingGlass aria-hidden="true" />
-                  <div><h3>No matching findings</h3><p>Clear the search or choose another severity.</p></div>
+                  <div><h3>No matching results</h3><p>Try another search or severity filter.</p></div>
                 </div>
               ) : (
-                <div className="findings-list" aria-label="Preflight findings">
+                <div className="findings-list" aria-label="Issues found">
                   {filteredFindings.map((finding) => (
                     <FindingRow key={finding.id} finding={finding} />
                   ))}
@@ -556,8 +562,8 @@ function App() {
             <div className="empty-state report-empty">
               <FileCode aria-hidden="true" />
               <div>
-                <h3>{isDirty ? 'Changes not analyzed' : 'No report yet'}</h3>
-                <p>{jsonErrors.source || jsonErrors.target ? 'Fix the JSON errors, then run preflight.' : 'Run preflight to generate a fresh report.'}</p>
+                <h3>{isDirty ? 'Files changed' : 'Nothing checked yet'}</h3>
+                <p>{jsonErrors.source || jsonErrors.target ? 'Fix the JSON errors and try again.' : 'Check both files to see the results.'}</p>
               </div>
             </div>
           )}
@@ -565,9 +571,8 @@ function App() {
 
         <section className="rules" id="rules" aria-labelledby="rules-title">
           <div>
-            <p className="eyebrow">Supported contracts</p>
-            <h2 id="rules-title">One engine. Several failure modes.</h2>
-            <p>LocaleGuard compares JSON structure and the technical tokens translators must preserve. It never judges prose quality.</p>
+            <h2 id="rules-title">What LocaleGuard checks</h2>
+            <p>It compares JSON structure and the code-like parts of each string. It does not assess translation quality.</p>
           </div>
           <ul>
             <li><strong>Structure</strong><span>Nested keys, arrays, primitive types, and null</span></li>
@@ -580,11 +585,11 @@ function App() {
 
       <footer>
         <div className="brand"><span className="brand-mark" aria-hidden="true"><BracketsCurly weight="bold" /></span><span>LocaleGuard</span></div>
-        <p>Open source, local-first localization preflight.</p>
+        <p>Free, open source, and processed in your browser.</p>
       </footer>
 
       <div className="sr-only" aria-live="polite">
-        {isLoading ? 'Locale comparison in progress.' : result ? `Comparison complete. ${result.summary.total} findings.` : isDirty ? 'Changes not analyzed.' : 'No comparison result.'}
+        {isLoading ? 'Checking locale files.' : result ? `Check complete. ${result.summary.total} issues.` : isDirty ? 'Files changed.' : 'No results yet.'}
       </div>
     </div>
   )
@@ -632,7 +637,7 @@ function LocaleEditor({
       <div className="editor-heading">
         <div><span>{kind === 'source' ? 'SRC' : 'TGT'}</span><h3>{title}</h3><small>{fileName}</small></div>
         <label className="upload-button" htmlFor={inputId}>
-          <FileArrowUp aria-hidden="true" weight="bold" /> Choose JSON
+          <FileArrowUp aria-hidden="true" weight="bold" /> Choose file
           <input id={inputId} type="file" accept="application/json,.json" onChange={onInput} />
         </label>
       </div>
@@ -645,7 +650,7 @@ function LocaleEditor({
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${editorId}-error` : undefined}
       />
-      {isDragging && <div className="drop-overlay"><FileArrowUp aria-hidden="true" /><strong>Drop {kind} JSON here</strong></div>}
+      {isDragging && <div className="drop-overlay"><FileArrowUp aria-hidden="true" /><strong>Drop the {kind} file here</strong></div>}
       {error && <p ref={errorRef} className="json-error" id={`${editorId}-error`} role="alert" tabIndex={-1}><Warning aria-hidden="true" weight="fill" />{error}</p>}
     </div>
   )
@@ -659,15 +664,15 @@ function FindingRow({ finding }: { finding: Finding }) {
           <span className="severity-icon" aria-hidden="true">
             {finding.severity === 'critical' ? <X weight="bold" /> : finding.severity === 'warning' ? <Warning weight="fill" /> : <FileCode weight="bold" />}
           </span>
-          {finding.severity}
+          {severityLabel(finding.severity)}
         </span>
         <span className="finding-path"><strong>{finding.path}</strong><small>{humanizeCategory(finding.category)}</small></span>
         <span className="finding-message">{finding.message}</span>
         <ArrowDown className="finding-chevron" aria-hidden="true" />
       </summary>
       <div className="finding-details">
-        <div><span>Expected contract</span><code>{formatValue(finding.expected)}</code></div>
-        <div><span>Actual contract</span><code>{formatValue(finding.actual)}</code></div>
+        <div><span>Source file</span><code>{formatValue(finding.expected)}</code></div>
+        <div><span>Target file</span><code>{formatValue(finding.actual)}</code></div>
         {finding.remediation && <p><strong>How to fix</strong>{finding.remediation}</p>}
       </div>
     </details>

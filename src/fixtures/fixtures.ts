@@ -105,9 +105,9 @@ const syntheticControlCodeBrokenTarget = {
 export const fixtures: LocaleFixture[] = [
   {
     id: 'broken',
-    label: 'Generic broken translation',
-    shortLabel: 'Broken demo',
-    description: 'Missing keys, type drift, placeholder mutations, markup damage, and a shortened array.',
+    label: 'Example with common errors',
+    shortLabel: 'Broken example',
+    description: 'Shows missing keys, changed value types, broken placeholders and markup, and a shorter array.',
     sourceName: 'en-source.json',
     targetName: 'it-broken.json',
     sourceText: format(genericSource),
@@ -115,9 +115,9 @@ export const fixtures: LocaleFixture[] = [
   },
   {
     id: 'valid',
-    label: 'Completely valid translation',
-    shortLabel: 'Valid fixture',
-    description: 'The copy changes while every key, type, placeholder, tag, escape, and array slot remains valid.',
+    label: 'Example with no errors',
+    shortLabel: 'Valid example',
+    description: 'All keys, value types, placeholders, tags, escape sequences, and array items match.',
     sourceName: 'en-source.json',
     targetName: 'it-valid.json',
     sourceText: format(genericSource),
@@ -125,9 +125,9 @@ export const fixtures: LocaleFixture[] = [
   },
   {
     id: 'control-codes',
-    label: 'Synthetic RPG control-code regression',
-    shortLabel: 'Control-code demo',
-    description: 'Original synthetic strings exercise compact and bracketed GameMaker-style control markers.',
+    label: 'GameMaker control-code errors',
+    shortLabel: 'Control-code example',
+    description: 'Shows missing, changed, and reordered GameMaker control codes in synthetic text.',
     sourceName: 'synthetic-source.json',
     targetName: 'synthetic-broken.json',
     sourceText: format(syntheticControlCodeSource),

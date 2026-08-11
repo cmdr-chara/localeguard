@@ -82,7 +82,7 @@ const stringContracts: readonly StringContract[] = [
     label: 'ICU placeholder',
     extract: extractIcuPlaceholders,
     compare: sameTokenMultiset,
-    remediation: 'Keep every ICU placeholder name, formatter kind, and occurrence intact.',
+    remediation: 'Keep every ICU placeholder name, format type, and repeated occurrence.',
   },
   {
     category: 'mustache-placeholders',
@@ -90,7 +90,7 @@ const stringContracts: readonly StringContract[] = [
     label: 'Mustache placeholder',
     extract: extractMustachePlaceholders,
     compare: sameMustacheContract,
-    remediation: 'Keep Mustache placeholders and section operators intact.',
+    remediation: 'Keep every Mustache placeholder and section marker.',
   },
   {
     category: 'printf-placeholders',
@@ -98,28 +98,28 @@ const stringContracts: readonly StringContract[] = [
     label: 'printf placeholder',
     extract: extractPrintfPlaceholders,
     compare: samePrintfContract,
-    remediation: 'Keep printf specifiers, including positional indexes, intact.',
+    remediation: 'Keep every printf specifier and positional index.',
   },
   {
     category: 'html-tags',
     severity: 'warning',
     label: 'HTML/XML tag',
     extract: extractHtmlTags,
-    remediation: 'Keep markup tag nesting and closing tags intact.',
+    remediation: 'Keep the same opening, closing, and self-closing tags.',
   },
   {
     category: 'escape-sequences',
     severity: 'warning',
     label: 'escape/control sequence',
     extract: extractEscapeSequences,
-    remediation: 'Keep escaped and control sequences intact.',
+    remediation: 'Keep every escape and control sequence in the same order.',
   },
   {
     category: 'game-control-markers',
     severity: 'critical',
     label: 'GameMaker control marker',
     extract: extractGameMakerMarkers,
-    remediation: 'Preserve control markers exactly, including their order and repetition.',
+    remediation: 'Keep every GameMaker control marker in the same order, including repeats.',
   },
 ]
 
@@ -310,7 +310,7 @@ function compareValue(source: JSONValue, target: JSONValue, path: string, findin
       explanation: `Expected ${sourceKind} but found ${targetKind}.`,
       expected: sourceKind,
       actual: targetKind,
-      remediation: 'Match the source JSON value type at this path.',
+      remediation: 'Use the same JSON value type as the source file at this path.',
     })
     return
   }
@@ -343,10 +343,10 @@ function compareObjects(source: JSONObject, target: JSONObject, path: string, fi
         category: 'missing-key',
         severity: 'critical',
         path: childPath,
-        explanation: 'Key exists in the source locale but is missing from the target locale.',
+        explanation: 'This key exists in the source file but is missing from the target file.',
         expected: 'present',
         actual: 'missing',
-        remediation: 'Add this key with a translation that preserves its contracts.',
+        remediation: 'Add this key to the target file.',
       })
       continue
     }
@@ -364,7 +364,7 @@ function compareObjects(source: JSONObject, target: JSONObject, path: string, fi
         category: 'extra-key',
         severity: 'info',
         path: propertyPath(path, key),
-        explanation: 'Key exists only in the target locale.',
+        explanation: 'This key exists only in the target file.',
         expected: 'absent',
         actual: 'present',
         remediation: 'Remove it or add the matching source key if it is intentional.',
@@ -379,10 +379,10 @@ function compareArrays(source: JSONArray, target: JSONArray, path: string, findi
       category: 'array-length',
       severity: 'warning',
       path,
-      explanation: 'Array lengths differ; shared indexes are still compared.',
+      explanation: 'The source and target arrays contain a different number of items.',
       expected: String(source.length),
       actual: String(target.length),
-      remediation: 'Match the source array length and ordering.',
+      remediation: 'Use the same number and order of items as the source file.',
     })
   }
 
@@ -406,7 +406,7 @@ function compareStringContracts(source: string, target: string, path: string, fi
         category: contract.category,
         severity: contract.severity,
         path,
-        explanation: `${contract.label} signature differs from the source.`,
+        explanation: `${contract.label} does not match the source file.`,
         expected: markerSignature(expectedTokens),
         actual: markerSignature(actualTokens),
         remediation: contract.remediation,
