@@ -177,8 +177,6 @@ export function extractIcuPlaceholders(value: string): readonly string[] {
       const format = match.groups.format
       tokens.push(format ? `{${match.groups.name},${format}}` : `{${match.groups.name}}`)
     }
-
-    index = end
   }
 
   return tokens
